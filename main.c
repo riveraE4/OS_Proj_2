@@ -9,8 +9,21 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef struct 
+{
+    int row;
+    int column;
+
+} parameters;
+
+//parameters *data = (parameters *) malloc(sizeof(parameters));
+//data->row = 1;
+//data->column = 1;
+/* Now create the thread passing it data as a parameter*/
+
 int main(int argc, char** argv)
 {
+
     return 0;
 }
      
