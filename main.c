@@ -8,22 +8,30 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
-typedef struct 
-{
+#define SIZE 9
+
+typedef struct {
     int row;
-    int column;
-
+    int col;
 } parameters;
-
-//parameters *data = (parameters *) malloc(sizeof(parameters));
-//data->row = 1;
-//data->column = 1;
-/* Now create the thread passing it data as a parameter*/
 
 int main(int argc, char** argv)
 {
+    char *filename = "input.txt";
+    FILE *file = fopen(filename, "r");
+    int numSud;
+    printf("BOARD STATE IN: %s\n", filename);
+    while ((numSud = fgetc(file)) != EOF) 
+        putchar(numSud);
+        printf("\n");
+        printf("SOLUTION: XXX\n");
+    fclose(file);
 
+
+
+
+    
     return 0;
 }
-     
