@@ -11,6 +11,11 @@
 #include <string.h>
 #include <time.h>
 #include <pthread.h> 
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
 
 #define SIZE 9
 #define SQUARE 3
@@ -27,7 +32,8 @@ typedef struct {
 
 /* global arrays for multi-threaded approach */
 int globalSudoku[SIZE][SIZE];
-int threadResults[11] = {0};
+int threadResults[27] = {0};
+int *processResults; // results from the child processes
 
 
 /* 
@@ -131,23 +137,89 @@ typedef struct {
     int index;
 } threadParameters;
 
+void *mtRowWorker(void *arg)
+{
+    threadParameters *tpar = (threadParameters*)arg;
+    int valid =1;
+    
+    for (int i =0; i < SIZE; i++) {
+        parameters rowParam = { .row = i, .col = 0, .checkType =0 };
+        if (!sudWorker(&rowParam, globalSudoku)) {
+            valid =0;
+            break;
+        }
+    }
+    threadResults[tpar->index] = valid;
+    pthread_exit(NULL);
+}
+
+void *mtColumnWorker(void *arg)
+{
+    threadParameters *tpar = (threadParameters*)arg;
+    int valid =1;
+
+    for (int j =0; j < SIZE; j++) {
+        parameters colParam = { .row = 0, .col = j, .checkType = 1};
+        if (!sudWorker(&colParam, globalSudoku)) {
+            valid = 0;
+            break;
+        }
+    }
+
+    threadResults[tpar->index] = valid;
+    pthread_exit(NULL);
+
+}
+
+void *mtThreadWorker(void *arg)
+{
+    threadParameters *tpar = (threadParameters*)arg;
+    int valid = sudWorker(&tpar->param, globalSudoku);
+    threadResults[tpar->index] = valid;
+    pthread_exit(NULL);
+
+}
+
+void *mtSingleRowWorker (void *arg)
+{
+    threadParameters *tpar = (threadParameters*)arg;
+    int r = tpar->param.row;
+    parameters rowParam = { .row = r, .col =0, .checkType =0 };
+    int valid = sudWorker(&rowParam, globalSudoku);
+    threadResults[tpar->index] = valid;
+    pthread_exit(NULL); 
+
+}
+
+void *mtSingleColumnWorker(void *arg)
+{
+    threadParameters *tpar = (threadParameters*)arg;
+    int c = tpar->param.col;
+    parameters colParam = { .row =0, .col = c, .checkType = 1 };
+    int valid = sudWorker(&colParam, globalSudoku);
+    threadResults[tpar->index] = valid;
+    pthread_exit(NULL);
+}
+
+
+
 /* 
  * mtThreadWorker:
  * thread worker calls sudWorker on the globalSudoku
  * sets threadResults[index] to 1 if valid, 0 otherwise
  */
-void *mtThreadWorker(void *arg) {
-    threadParameters *tpar = (threadParameters*)arg;
-    int valid = sudWorker(&tpar->param, globalSudoku);
+//oid *mtThreadWorker(void *arg) {
+  //  threadParameters *tpar = (threadParameters*)arg;
+  //  int valid = sudWorker(&tpar->param, globalSudoku);
 
-    if (valid == 1) {
-        threadResults[tpar->index] = 1;
-    } else {
-        threadResults[tpar->index] = 0;
-    }
+ //   if (valid == 1) {
+        //threadResults[tpar->index] = 1;
+ //   } else {
+        //threadResults[tpar->index] = 0;
+  //  }
 
-    pthread_exit(NULL);
-}
+ ////   pthread_exit(NULL);
+//}
 
 /*
  * isSudValidMulti:
@@ -155,7 +227,7 @@ void *mtThreadWorker(void *arg) {
  * 1 thread checks all rows, 1 thread checks all columns, 9 threads for subgrids
  * returns 1 if all valid, 0 otherwise
  */
-int isSudValidMulti() {
+int isSudValidMulti_11threads() {
     pthread_t threads[11];
     threadParameters tparams[11];
 
@@ -169,14 +241,14 @@ int isSudValidMulti() {
     tparams[0].param.col = 0;
     tparams[0].param.checkType = 0;
     tparams[0].index = 0;
-    pthread_create(&threads[0], NULL, mtThreadWorker, (void*)&tparams[0]);
+    pthread_create(&threads[0], NULL, mtRowWorker, (void*)&tparams[0]);
 
     /* create thread for checking all columns (index 1) */
     tparams[1].param.row = 0;
     tparams[1].param.col = 0;
     tparams[1].param.checkType = 1;
     tparams[1].index = 1;
-    pthread_create(&threads[1], NULL, mtThreadWorker, (void*)&tparams[1]);
+    pthread_create(&threads[1], NULL, mtColumnWorker, (void*)&tparams[1]);
 
     /* create threads for each 3x3 subgrid (indices 2 to 10) */
     for (int i = 0; i < 9; i++) {
@@ -203,6 +275,95 @@ int isSudValidMulti() {
 
     return 1; /* all checks passed */
 }
+
+
+int isSudValidMulti_27Threads()
+{
+    pthread_t threads[27];
+    threadParameters tparams[27];
+
+    for (int i = 0; i < 27; i++) {
+        threadResults[i]=0;
+    }
+// 9 threads created for rows
+    for (int i = 0; i < 9; i++) {
+        tparams[i].param.row = i;
+        tparams[i].param.col = 0;
+        tparams[i].param.checkType = 0;
+        tparams[i].index = i;
+        pthread_create(&threads[i], NULL, mtSingleRowWorker, (void*)&tparams[i]);
+    }
+// 9 threads created for columns
+
+    for (int i = 0; i < 9; i++) {
+        tparams[i+9].param.row = 0;
+        tparams[i+9].param.col = i;
+        tparams[i+9].param.checkType = 1;
+        tparams[i+9].index = i+9;
+        pthread_create(&threads[i+9], NULL, mtSingleColumnWorker, (void*)&tparams[i+9]);
+    }
+// 9 threads for the subgrids 3x3
+    for (int i = 0; i < 9; i++) {
+        int sRow = (i / 3) * 3;
+        int sCol = (i % 3) * 3;
+        tparams[i+ 18].param.row = sRow;
+        tparams[i+ 18].param.col = sCol;
+        tparams[i+ 18].param.checkType = 2;
+        tparams[i + 18].index = i + 18;
+        pthread_create(&threads[i + 18], NULL, mtThreadWorker, (void*)&tparams[i + 18]);
+    }
+    for (int i = 0; i < 27; i++) {
+    pthread_join(threads[i], NULL);
+
+    }
+    for (int i = 0; i < 27; i++) {
+        if (threadResults[i] == 0) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+void validateRows()
+{
+    for (int i = 0; i < SIZE; i++) {
+        parameters rowParam = { .row = i, .col =0, .checkType = 0 };
+        if (!sudWorker(&rowParam, globalSudoku)) {
+            processResults[0] =0;
+            exit(0);
+        }
+    }
+    processResults[0] = 1;
+    exit(0);
+}
+void validateColumns()
+{
+    for (int j = 0; j < SIZE; j++) {
+        parameters colParam = { .row = 0, .col =j, .checkType = 1 };
+        if (!sudWorker(&colParam, globalSudoku)) {
+            processResults[1] = 0;
+            exit(0);
+        }
+    }
+    processResults[1] =1;
+    exit(0);
+}
+
+void validateGrids()
+{
+    for (int block =0; block < SIZE; block++) {
+        int sRow = (block / 3) * 3;
+        int sCol = (block % 3) * 3;
+        parameters gridParam = { .row = sRow, .col =sCol, .checkType = 2 };
+        if (!sudWorker(&gridParam, globalSudoku)) {
+            processResults[2] = 0;
+            exit(0);
+        }
+    }
+    processResults[2] = 1;
+    exit(0);
+}
+
 
 /*
  * main:
@@ -248,10 +409,17 @@ int main(int argc, char** argv) {
         printf("\n");
     }
 
+    clock_t start_clock = clock();
+    clock_t end_clock = clock();
+    double time;
+
     /* only option 1 (single-thread) is implemented for now */
     if (option == 1) {
+        start_clock = clock();
         int valid = isSudValidSingle(sudoku);
-        printf("SOLUTION: %s\n", valid ? "YES" : "NO");
+        end_clock = clock();
+        time = ((double)(end_clock - start_clock)) / CLOCKS_PER_SEC;
+        printf("SOLUTION: %s (%f seconds)\n", valid ? "YES" : "NO", time);
     }
     /* minimal changes: option 2 calls multi-threaded function */
     else if (option == 2) {
@@ -261,11 +429,62 @@ int main(int argc, char** argv) {
                 globalSudoku[i][j] = sudoku[i][j];
             }
         }
-        int valid = isSudValidMulti();
-        printf("SOLUTION: %s\n", valid ? "YES" : "NO");
+        start_clock = clock();
+        int valid = isSudValidMulti_27Threads();
+        end_clock = clock();
+        time = ((double)(end_clock - start_clock)) / CLOCKS_PER_SEC;
+        printf("SOLUTION: %s (%f seconds)\n", valid ? "YES" : "NO", time);
     }
-    else {
-        printf("Option %d not yet implemented.\n", option);
+    else if (option == 3) {
+        for (int i = 0; i < SIZE; i++) {
+            for (int j =0; j < SIZE; j++) {
+                globalSudoku[i][j]=sudoku[i][j];
+            }
+        }
+        int shm_fd = shm_open("/sudoku_shm", O_CREAT | O_RDWR, 0666);
+        if (shm_fd == -1) {
+            perror("shm_open");
+            exit(1);
+        }
+        ftruncate(shm_fd, 3 * sizeof(int));
+        processResults = mmap(NULL, 3 * sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+        if (processResults == MAP_FAILED) {
+            perror("mmap");
+            exit(1);
+        }
+        for (int i = 0; i < 3; i++) {
+            processResults[i] = 0;
+        }
+        //printf("Option %d not yet implemented.\n", option);
+        start_clock = clock();
+        
+        pid_t pid1 = fork();
+        if (pid1 == 0) {
+            validateRows();
+        }
+
+        pid_t pid2 = fork();
+        if (pid2 == 0) {
+            validateColumns();
+        }
+        
+        pid_t pid3 = fork();
+        if (pid3 == 0) {
+            validateGrids();
+        }
+
+        waitpid(pid1, NULL, 0);
+        waitpid(pid2, NULL, 0);
+        waitpid(pid3, NULL, 0);
+
+        end_clock = clock();
+        time = ((double)(end_clock - start_clock)) / CLOCKS_PER_SEC;
+
+        int valid = (processResults[0] == 1 && processResults[1] == 1 && processResults[2] == 1);
+        printf ("SOLUTION: %s (%f seconds)\n", valid ? "YES" : "NO", time);
+
+        shm_unlink("/sudoku_shm");
+        
     }
 
     return 0;
