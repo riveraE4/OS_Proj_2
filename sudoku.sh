@@ -24,7 +24,7 @@ run() {
 		total_time=$(echo "$total_time + $run_time" | bc)
 		echo "Run $i time: $run_time seconds" >> "$output_file"
 	done
-	average=$(echo "scale=4; $tot_time / $ITER" | bc)
+	average=$(echo "scale=8; $total_time / $ITER" | bc)
 	echo "Average time for Option $option: $average seconds" | tee -a "$output_file"
 	echo ""
 }

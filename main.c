@@ -372,8 +372,10 @@ void validateGrids()
  * 3) If option == 1, performs the single-threaded check
  * 4) Prints YES or NO depending on validity
  */
-int main(int argc, char** argv) {
-    /* Check if the user provided at least one argument (the option). */
+
+
+ int main(int argc, char** argv) {
+    /* Check if the user provided at least one argument, option chosen */
     if (argc < 2) {
         printf("Usage: %s <option>\n", argv[0]);
         printf("Example: %s 1\n", argv[0]);
@@ -409,19 +411,24 @@ int main(int argc, char** argv) {
         printf("\n");
     }
 
-    clock_t start_clock = clock();
-    clock_t end_clock = clock();
+    /* only declare timing variables here */
+    clock_t start_clock;
+    clock_t end_clock;
     double time;
 
-    /* only option 1 (single-thread) is implemented for now */
+    /* only option 1 (single-thread) is implemented */
     if (option == 1) {
+        /* start timing before calling isSudValidSingle */
         start_clock = clock();
         int valid = isSudValidSingle(sudoku);
         end_clock = clock();
+
+        /* calculate elapsed time in seconds */
         time = ((double)(end_clock - start_clock)) / CLOCKS_PER_SEC;
+
         printf("SOLUTION: %s (%f seconds)\n", valid ? "YES" : "NO", time);
     }
-    /* minimal changes: option 2 calls multi-threaded function */
+    /* option 2 calls multi-threaded function (27 threads) */
     else if (option == 2) {
         /* copy sudoku board into the globalSudoku before multi-threading */
         for (int i = 0; i < SIZE; i++) {
@@ -429,18 +436,27 @@ int main(int argc, char** argv) {
                 globalSudoku[i][j] = sudoku[i][j];
             }
         }
+
+        /* start timing before calling isSudValidMulti_27Threads */
         start_clock = clock();
         int valid = isSudValidMulti_27Threads();
         end_clock = clock();
+
+        /* calculate elapsed time in seconds */
         time = ((double)(end_clock - start_clock)) / CLOCKS_PER_SEC;
+
         printf("SOLUTION: %s (%f seconds)\n", valid ? "YES" : "NO", time);
     }
+    /* option 3 calls the multi-process solution */
     else if (option == 3) {
+        /* copy sudoku board into the globalSudoku before forking */
         for (int i = 0; i < SIZE; i++) {
-            for (int j =0; j < SIZE; j++) {
-                globalSudoku[i][j]=sudoku[i][j];
+            for (int j = 0; j < SIZE; j++) {
+                globalSudoku[i][j] = sudoku[i][j];
             }
         }
+
+        /* set up shared memory, etc., then time the process forks */
         int shm_fd = shm_open("/sudoku_shm", O_CREAT | O_RDWR, 0666);
         if (shm_fd == -1) {
             perror("shm_open");
@@ -455,9 +471,10 @@ int main(int argc, char** argv) {
         for (int i = 0; i < 3; i++) {
             processResults[i] = 0;
         }
-        //printf("Option %d not yet implemented.\n", option);
+
+        /* start timing before the forks */
         start_clock = clock();
-        
+
         pid_t pid1 = fork();
         if (pid1 == 0) {
             validateRows();
@@ -484,7 +501,9 @@ int main(int argc, char** argv) {
         printf ("SOLUTION: %s (%f seconds)\n", valid ? "YES" : "NO", time);
 
         shm_unlink("/sudoku_shm");
-        
+    }
+    else {
+        printf("Option %d not yet implemented.\n", option);
     }
 
     return 0;
