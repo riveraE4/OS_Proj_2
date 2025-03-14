@@ -3,7 +3,11 @@
 * Project 2: Multithreaded Programming
 * Dr. Yoon
 * 2/4/25
-* Description: XXX
+* Description: this program validates a sudoku board using three
+different apporaches
+- single threaded
+- multi threaded (27)
+- shared memory (parent/child)
 */
 
 #include <stdio.h>
@@ -201,81 +205,14 @@ void *mtSingleColumnWorker(void *arg)
     pthread_exit(NULL);
 }
 
-
-
-/* 
- * mtThreadWorker:
- * thread worker calls sudWorker on the globalSudoku
- * sets threadResults[index] to 1 if valid, 0 otherwise
- */
-//oid *mtThreadWorker(void *arg) {
-  //  threadParameters *tpar = (threadParameters*)arg;
-  //  int valid = sudWorker(&tpar->param, globalSudoku);
-
- //   if (valid == 1) {
-        //threadResults[tpar->index] = 1;
- //   } else {
-        //threadResults[tpar->index] = 0;
-  //  }
-
- ////   pthread_exit(NULL);
-//}
-
 /*
  * isSudValidMulti:
- * creates multiple threads to check rows, columns, and subgrids
- * 1 thread checks all rows, 1 thread checks all columns, 9 threads for subgrids
+ * creates 27 threads to validate the board
+ * 9 threads for rows
+ * 9 threads for cols
+ * 9 threads for subgrids
  * returns 1 if all valid, 0 otherwise
  */
-int isSudValidMulti_11threads() {
-    pthread_t threads[11];
-    threadParameters tparams[11];
-
-    /* reset threadResults to 0 */
-    for (int i = 0; i < 11; i++) {
-        threadResults[i] = 0;
-    }
-
-    /* create thread for checking all rows (index 0) */
-    tparams[0].param.row = 0;
-    tparams[0].param.col = 0;
-    tparams[0].param.checkType = 0;
-    tparams[0].index = 0;
-    pthread_create(&threads[0], NULL, mtRowWorker, (void*)&tparams[0]);
-
-    /* create thread for checking all columns (index 1) */
-    tparams[1].param.row = 0;
-    tparams[1].param.col = 0;
-    tparams[1].param.checkType = 1;
-    tparams[1].index = 1;
-    pthread_create(&threads[1], NULL, mtColumnWorker, (void*)&tparams[1]);
-
-    /* create threads for each 3x3 subgrid (indices 2 to 10) */
-    for (int i = 0; i < 9; i++) {
-        int startRow = (i / 3) * 3;
-        int startCol = (i % 3) * 3;
-        tparams[i + 2].param.row = startRow;
-        tparams[i + 2].param.col = startCol;
-        tparams[i + 2].param.checkType = 2;
-        tparams[i + 2].index = i + 2;
-        pthread_create(&threads[i + 2], NULL, mtThreadWorker, (void*)&tparams[i + 2]);
-    }
-
-    /* wait for all 11 threads to complete */
-    for (int i = 0; i < 11; i++) {
-        pthread_join(threads[i], NULL);
-    }
-
-    /* check threadResults array to see if everything was valid */
-    for (int i = 0; i < 11; i++) {
-        if (threadResults[i] == 0) {
-            return 0; /* if any check is invalid, return 0 */
-        }
-    }
-
-    return 1; /* all checks passed */
-}
-
 
 int isSudValidMulti_27Threads()
 {
@@ -364,7 +301,6 @@ void validateGrids()
     exit(0);
 }
 
-
 /*
  * main:
  * 1) Read the Sudoku board from input.txt
@@ -372,7 +308,6 @@ void validateGrids()
  * 3) If option == 1, performs the single-threaded check
  * 4) Prints YES or NO depending on validity
  */
-
 
  int main(int argc, char** argv) {
     /* Check if the user provided at least one argument, option chosen */
